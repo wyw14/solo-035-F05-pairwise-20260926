@@ -39,7 +39,11 @@ type Runtime struct {
 	Continuity      *caption.Continuity
 	Evidence        *quality.EvidenceSet
 	Quality         *quality.Coordinator
-	Evaluator       *quality.Evaluator
+	Rulebook        *quality.Rulebook
+	Selections      *quality.SelectionLog
+	Exceptions      *quality.ExceptionRegistry
+	Permits         *quality.PermitLedger
+	PermitFlow      *quality.PermitEngine
 	JournalState    *journal.State
 	JournalStore    *journal.Store
 	Journal         *journal.Integration
@@ -63,7 +67,7 @@ func NewRuntime(dataDirectory string, clock func() time.Time) (*Runtime, error) 
 	if err != nil {
 		return nil, err
 	}
-	evaluator, err := quality.NewEvaluator(quality.Thresholds{MinimumLoudness: -60, MaximumLoudness: 6, MaximumAgeMillis: 5000})
+	book, err := seedRulebook(clock)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +91,11 @@ func NewRuntime(dataDirectory string, clock func() time.Time) (*Runtime, error) 
 	runtime.Continuity = caption.NewContinuity()
 	runtime.Evidence = quality.NewEvidenceSet()
 	runtime.Quality = quality.NewCoordinator(runtime.Evidence, clock)
-	runtime.Evaluator = evaluator
+	runtime.Rulebook = book
+	runtime.Selections = quality.NewSelectionLog()
+	runtime.Exceptions = quality.NewExceptionRegistry()
+	runtime.Permits = quality.NewPermitLedger()
+	runtime.PermitFlow = quality.NewPermitEngine(runtime.Evidence, runtime.Rulebook, runtime.Selections, runtime.Exceptions, runtime.Permits, clock)
 	runtime.JournalState = journal.NewState()
 	runtime.JournalStore = store
 	runtime.Journal = journal.NewIntegration(store, runtime.JournalState, clock)
@@ -101,4 +109,24 @@ func NewRuntime(dataDirectory string, clock func() time.Time) (*Runtime, error) 
 		return nil, fmt.Errorf("backup coordinator was not constructed")
 	}
 	return runtime, nil
+}
+
+// seedRulebook publishes the baseline v1 quality rules for every known
+// event type. news and sports keep the legacy global thresholds so existing
+// behavior is preserved; concert tightens the loudness ceiling.
+func seedRulebook(clock func() time.Time) (*quality.Rulebook, error) {
+	book := quality.NewRulebook()
+	legacy := quality.Thresholds{MinimumLoudness: -60, MaximumLoudness: 6, MaximumAgeMillis: 5000}
+	probes := []quality.ProbeRequirement{{Kind: "waveform", MinimumSources: 2}}
+	if _, err := book.Publish("news", legacy, probes, clock()); err != nil {
+		return nil, err
+	}
+	if _, err := book.Publish("sports", legacy, probes, clock()); err != nil {
+		return nil, err
+	}
+	concert := quality.Thresholds{MinimumLoudness: -48, MaximumLoudness: 3, MaximumAgeMillis: 5000}
+	if _, err := book.Publish("concert", concert, probes, clock()); err != nil {
+		return nil, err
+	}
+	return book, nil
 }

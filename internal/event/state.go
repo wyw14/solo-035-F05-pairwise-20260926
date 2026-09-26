@@ -19,8 +19,8 @@ func NewState() *State {
 	return &State{events: make(map[model.EventID]model.LiveEvent), history: make(map[model.EventID][]model.EventPhase)}
 }
 
-func (state *State) Create(name string, now time.Time) (model.LiveEvent, error) {
-	event, err := model.NewLiveEvent(name, now)
+func (state *State) Create(name string, eventType string, now time.Time) (model.LiveEvent, error) {
+	event, err := model.NewLiveEvent(name, eventType, now)
 	if err != nil {
 		return model.LiveEvent{}, err
 	}

@@ -31,6 +31,7 @@ var phaseTransitions = map[EventPhase]map[EventPhase]bool{
 type LiveEvent struct {
 	ID               EventID    `json:"id"`
 	Name             string     `json:"name"`
+	Type             string     `json:"type"`
 	Phase            EventPhase `json:"phase"`
 	Revision         RevisionID `json:"revision"`
 	CommandEpoch     uint64     `json:"command_epoch"`
@@ -39,13 +40,17 @@ type LiveEvent struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
-func NewLiveEvent(name string, now time.Time) (LiveEvent, error) {
+func NewLiveEvent(name string, eventType string, now time.Time) (LiveEvent, error) {
 	if name == "" {
 		return LiveEvent{}, errors.New("event name is required")
+	}
+	if eventType == "" {
+		return LiveEvent{}, errors.New("event type is required")
 	}
 	return LiveEvent{
 		ID:               NewEventID(),
 		Name:             name,
+		Type:             eventType,
 		Phase:            PhasePreparing,
 		Revision:         NewRevisionID(),
 		CommandEpoch:     1,

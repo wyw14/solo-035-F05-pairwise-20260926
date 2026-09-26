@@ -17,15 +17,41 @@ func NewCoordinator(runtime *Runtime) *Coordinator {
 	return &Coordinator{runtime: runtime}
 }
 
-func (coordinator *Coordinator) CreateEvent(name string) (model.LiveEvent, error) {
-	event, err := coordinator.runtime.Events.Create(name, coordinator.runtime.Clock())
+func (coordinator *Coordinator) CreateEvent(name string, eventType string) (model.LiveEvent, error) {
+	rules, ok := coordinator.runtime.Rulebook.Current(eventType)
+	if !ok {
+		return model.LiveEvent{}, fmt.Errorf("event type %s has no published quality rules", eventType)
+	}
+	event, err := coordinator.runtime.Events.Create(name, eventType, coordinator.runtime.Clock())
 	if err != nil {
+		return model.LiveEvent{}, err
+	}
+	if err := coordinator.runtime.Selections.Pin(event.ID, event.Revision, rules.Key(), coordinator.runtime.Clock()); err != nil {
 		return model.LiveEvent{}, err
 	}
 	if _, err := coordinator.runtime.EventFlow.Arm(event.ID); err != nil {
 		return model.LiveEvent{}, err
 	}
 	return coordinator.runtime.Events.GetOrZero(event.ID), nil
+}
+
+func (coordinator *Coordinator) AdvanceProgram(eventID model.EventID) (model.LiveEvent, error) {
+	event, ok := coordinator.runtime.Events.Get(eventID)
+	if !ok {
+		return model.LiveEvent{}, fmt.Errorf("event %s not found", eventID)
+	}
+	rules, ok := coordinator.runtime.Rulebook.Current(event.Type)
+	if !ok {
+		return model.LiveEvent{}, fmt.Errorf("event type %s has no published quality rules", event.Type)
+	}
+	event, err := coordinator.runtime.Events.AdvanceProgram(eventID, coordinator.runtime.Clock())
+	if err != nil {
+		return model.LiveEvent{}, err
+	}
+	if err := coordinator.runtime.Selections.Pin(event.ID, event.Revision, rules.Key(), coordinator.runtime.Clock()); err != nil {
+		return model.LiveEvent{}, err
+	}
+	return event, nil
 }
 
 func (coordinator *Coordinator) PrepareSignal(eventID model.EventID, sourceID model.SourceID) (model.SignalStatus, error) {
@@ -94,25 +120,18 @@ func (coordinator *Coordinator) EstablishInterlocks(eventID model.EventID) error
 	if !ok {
 		return fmt.Errorf("event %s not found", eventID)
 	}
-	waveA, _, err := coordinator.runtime.AudioMonitor.Measure("probe-a", -18, coordinator.runtime.Clock())
+	waveA, loudA, err := coordinator.runtime.AudioMonitor.Measure("probe-a", -18, coordinator.runtime.Clock())
 	if err != nil {
 		return err
 	}
-	waveB, _, err := coordinator.runtime.AudioMonitor.Measure("probe-b", -17, coordinator.runtime.Clock())
+	waveB, loudB, err := coordinator.runtime.AudioMonitor.Measure("probe-b", -17, coordinator.runtime.Clock())
 	if err != nil {
 		return err
 	}
-	if err := coordinator.runtime.Evaluator.Accept(waveA); err != nil {
-		return err
-	}
-	if err := coordinator.runtime.Evaluator.Accept(waveB); err != nil {
-		return err
-	}
-	if err := coordinator.runtime.Quality.Record(eventID, waveA); err != nil {
-		return err
-	}
-	if err := coordinator.runtime.Quality.Record(eventID, waveB); err != nil {
-		return err
+	for _, item := range []model.AudioEvidence{waveA, loudA, waveB, loudB} {
+		if err := coordinator.runtime.Quality.Record(eventID, item); err != nil {
+			return err
+		}
 	}
 	if err := coordinator.runtime.Continuity.Accept(eventID, caption.Cue{Revision: event.Revision, Sequence: 1, Text: "ON AIR"}); err != nil {
 		return err
@@ -132,7 +151,7 @@ func (coordinator *Coordinator) CommitOnAir(eventID model.EventID, fence uint64)
 	if err := coordinator.runtime.CaptionFlow.Ready(eventID, event.Revision); err != nil {
 		return err
 	}
-	if _, err := coordinator.runtime.Quality.Permit(eventID, true, true); err != nil {
+	if _, err := coordinator.runtime.PermitFlow.Permit(eventID, event.Revision, true, true); err != nil {
 		return err
 	}
 	if err := coordinator.runtime.Playout.CommitOnAir(event, fence, map[string]any{"offset_ms": 0, "source_generation": event.SourceGeneration}); err != nil {

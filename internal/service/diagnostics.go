@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/wyw14/solo-035/internal/model"
+	"github.com/wyw14/solo-035/internal/quality"
 )
 
 type DiagnosticCheck struct {
@@ -40,6 +41,7 @@ func (runtime *Runtime) Diagnostics() DiagnosticReport {
 		runtime.checkPlayout(now),
 		runtime.checkJournal(now),
 		runtime.checkInterlocks(now),
+		runtime.checkQualityRules(now),
 	}
 	sort.Slice(checks, func(i, j int) bool { return checks[i].Name < checks[j].Name })
 	report := DiagnosticReport{Healthy: true, Checks: checks, CheckedAt: now}
@@ -104,11 +106,15 @@ func (runtime *Runtime) checkSignals(now time.Time) DiagnosticCheck {
 func (runtime *Runtime) checkEncoders(now time.Time) DiagnosticCheck {
 	resources := runtime.EncoderFlow.Equipment()
 	check := DiagnosticCheck{Name: "encoder-leases", Passed: true, CheckedAt: now}
-	thresholds := runtime.Evaluator.Thresholds()
-	if !runtime.AudioMonitor.WithinRange(thresholds.MinimumLoudness) || !runtime.AudioMonitor.WithinRange(thresholds.MaximumLoudness) {
-		check.Passed = false
-		check.Detail = "audio and quality thresholds disagree"
-		return check
+	for _, set := range runtime.Rulebook.ListAll() {
+		if set.Status != quality.RuleSetPublished {
+			continue
+		}
+		if !runtime.AudioMonitor.WithinRange(set.Thresholds.MinimumLoudness) || !runtime.AudioMonitor.WithinRange(set.Thresholds.MaximumLoudness) {
+			check.Passed = false
+			check.Detail = fmt.Sprintf("quality rules %s v%d disagree with the audio monitor range", set.EventType, set.Version)
+			return check
+		}
 	}
 	owners := make(map[model.EventID]string)
 	healthy := 0
@@ -193,6 +199,19 @@ func (runtime *Runtime) checkJournal(now time.Time) DiagnosticCheck {
 		}
 	}
 	check.Detail = fmt.Sprintf("%d durable records at %s preserve proof-before-publication order", len(records), runtime.JournalStore.Path())
+	return check
+}
+
+func (runtime *Runtime) checkQualityRules(now time.Time) DiagnosticCheck {
+	check := DiagnosticCheck{Name: "quality-rules", Passed: true, CheckedAt: now}
+	for _, event := range runtime.Events.List() {
+		if _, ok := runtime.Selections.Current(event.ID, event.Revision); !ok {
+			check.Passed = false
+			check.Detail = fmt.Sprintf("event %s revision %s has no pinned quality rule", event.ID, event.Revision)
+			return check
+		}
+	}
+	check.Detail = fmt.Sprintf("%d rule sets are published and every event revision is pinned", len(runtime.Rulebook.ListAll()))
 	return check
 }
 

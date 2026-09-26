@@ -9,7 +9,7 @@ import (
 
 func Bootstrap(runtime *Runtime) error {
 	coordinator := NewCoordinator(runtime)
-	event, err := coordinator.CreateEvent("Evening News")
+	event, err := coordinator.CreateEvent("Evening News", "news")
 	if err != nil {
 		return err
 	}

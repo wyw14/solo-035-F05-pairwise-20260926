@@ -7,18 +7,29 @@ import (
 
 	"github.com/wyw14/solo-035/internal/backup"
 	"github.com/wyw14/solo-035/internal/model"
+	"github.com/wyw14/solo-035/internal/quality"
 )
 
 type ControlRequest struct {
-	Action      string `json:"action"`
-	EventID     string `json:"event_id"`
-	SourceID    string `json:"source_id"`
-	EncoderID   string `json:"encoder_id"`
-	Healthy     bool   `json:"healthy"`
-	Bitrate     int    `json:"bitrate"`
-	Count       int64  `json:"count"`
-	Message     string `json:"message"`
-	DelayMillis int64  `json:"delay_millis"`
+	Action          string                     `json:"action"`
+	EventID         string                     `json:"event_id"`
+	SourceID        string                     `json:"source_id"`
+	EncoderID       string                     `json:"encoder_id"`
+	Healthy         bool                       `json:"healthy"`
+	Bitrate         int                        `json:"bitrate"`
+	Count           int64                      `json:"count"`
+	Message         string                     `json:"message"`
+	DelayMillis     int64                      `json:"delay_millis"`
+	EventType       string                     `json:"event_type,omitempty"`
+	Approver        string                     `json:"approver,omitempty"`
+	Item            string                     `json:"item,omitempty"`
+	Kind            string                     `json:"kind,omitempty"`
+	Minimum         float64                    `json:"minimum,omitempty"`
+	Maximum         float64                    `json:"maximum,omitempty"`
+	MaxAgeMillis    int64                      `json:"max_age_millis,omitempty"`
+	Probes          []quality.ProbeRequirement `json:"probes,omitempty"`
+	PermitID        string                     `json:"permit_id,omitempty"`
+	ExpiresInMillis int64                      `json:"expires_in_millis,omitempty"`
 }
 
 type ControlResult struct {
@@ -42,7 +53,7 @@ func (runtime *Runtime) ExecuteControl(ctx context.Context, request ControlReque
 		result.Value = value
 		return result, err
 	case "advance-program":
-		value, err := runtime.Events.AdvanceProgram(eventID, runtime.Clock())
+		value, err := coordinator.AdvanceProgram(eventID)
 		result.Value = value
 		return result, err
 	case "advance-source":
@@ -98,6 +109,36 @@ func (runtime *Runtime) ExecuteControl(ctx context.Context, request ControlReque
 	case "quality-reset":
 		runtime.Quality.Reset(eventID)
 		result.Value = eventID
+		return result, nil
+	case "publish-quality-rules":
+		thresholds := quality.Thresholds{MinimumLoudness: request.Minimum, MaximumLoudness: request.Maximum, MaximumAgeMillis: request.MaxAgeMillis}
+		set, err := runtime.Rulebook.Publish(request.EventType, thresholds, request.Probes, runtime.Clock())
+		if err != nil {
+			return result, err
+		}
+		result.Value = set
+		return result, nil
+	case "grant-quality-exception":
+		event, ok := runtime.Events.Get(eventID)
+		if !ok {
+			return result, fmt.Errorf("event %s not found", eventID)
+		}
+		selection, ok := runtime.Selections.Current(event.ID, event.Revision)
+		if !ok {
+			return result, fmt.Errorf("event %s revision %s has no pinned quality rule", event.ID, event.Revision)
+		}
+		exception, err := runtime.Exceptions.Grant(event.ID, selection.Rule, request.Item, request.Kind, request.Approver, request.Message, runtime.Clock(), time.Duration(request.ExpiresInMillis)*time.Millisecond)
+		if err != nil {
+			return result, err
+		}
+		result.Value = exception
+		return result, nil
+	case "recalculate-permit":
+		record, ok := runtime.Permits.Get(request.PermitID)
+		if !ok {
+			return result, fmt.Errorf("permit %s not found", request.PermitID)
+		}
+		result.Value = quality.Recalculate(record, runtime.Clock())
 		return result, nil
 	case "record-gap":
 		if err := runtime.Receiver.RecordGap(sourceID, request.Count); err != nil {

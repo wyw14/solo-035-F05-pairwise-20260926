@@ -8,6 +8,7 @@ import (
 
 type createOperationRequest struct {
 	Name string `json:"name"`
+	Type string `json:"type"`
 }
 
 func (server *Server) createOperation(writer http.ResponseWriter, request *http.Request) {
@@ -24,7 +25,11 @@ func (server *Server) createOperation(writer http.ResponseWriter, request *http.
 		writeError(writer, http.StatusBadRequest, "operation name is required")
 		return
 	}
-	event, err := server.coordinator.CreateEvent(input.Name)
+	input.Type = strings.TrimSpace(input.Type)
+	if input.Type == "" {
+		input.Type = "news"
+	}
+	event, err := server.coordinator.CreateEvent(input.Name, input.Type)
 	if err != nil {
 		writeError(writer, http.StatusConflict, err.Error())
 		return

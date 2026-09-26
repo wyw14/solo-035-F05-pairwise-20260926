@@ -5,10 +5,13 @@ import "time"
 type OperationView struct {
 	EventID          EventID    `json:"event_id"`
 	Name             string     `json:"name"`
+	Type             string     `json:"type"`
 	Phase            EventPhase `json:"phase"`
 	ProgramRevision  RevisionID `json:"program_revision"`
 	SourceGeneration uint64     `json:"source_generation"`
 	CommandEpoch     uint64     `json:"command_epoch"`
+	RuleType         string     `json:"rule_type,omitempty"`
+	RuleVersion      int        `json:"rule_version,omitempty"`
 }
 
 type EquipmentView struct {

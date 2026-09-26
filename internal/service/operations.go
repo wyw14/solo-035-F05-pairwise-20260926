@@ -10,14 +10,20 @@ import (
 func (runtime *Runtime) Snapshot() model.RuntimeSnapshot {
 	snapshot := model.RuntimeSnapshot{CapturedAt: runtime.Clock().UTC()}
 	for _, event := range runtime.Events.List() {
-		snapshot.Operations = append(snapshot.Operations, model.OperationView{
+		view := model.OperationView{
 			EventID:          event.ID,
 			Name:             event.Name,
+			Type:             event.Type,
 			Phase:            event.Phase,
 			ProgramRevision:  event.Revision,
 			SourceGeneration: event.SourceGeneration,
 			CommandEpoch:     event.CommandEpoch,
-		})
+		}
+		if selection, ok := runtime.Selections.Latest(event.ID); ok {
+			view.RuleType = selection.Rule.EventType
+			view.RuleVersion = selection.Rule.Version
+		}
+		snapshot.Operations = append(snapshot.Operations, view)
 		status, synced := runtime.Sync.Status(event.ID)
 		snapshot.Interlocks = append(snapshot.Interlocks, model.InterlockView{EventID: event.ID, Name: "frame-sync", Passed: synced && status.Stable, Detail: status.Reason})
 		captionStatus, captionKnown := runtime.Captions.Get(event.ID)
