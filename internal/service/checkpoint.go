@@ -12,11 +12,12 @@ import (
 )
 
 type ControlCheckpoint struct {
-	Events  []event.RecoveryRecord   `json:"events"`
-	Sync    []syncer.Recovery        `json:"sync"`
-	Backup  []backup.RecoveryRecord  `json:"backup"`
-	Quality []quality.RecoveryRecord `json:"quality"`
-	Journal []journal.Record         `json:"journal"`
+	Events        []event.RecoveryRecord   `json:"events"`
+	Sync          []syncer.Recovery        `json:"sync"`
+	Backup        []backup.RecoveryRecord  `json:"backup"`
+	Quality       []quality.RecoveryRecord `json:"quality"`
+	QualityPolicy quality.PolicyRecord     `json:"quality_policy"`
+	Journal       []journal.Record         `json:"journal"`
 }
 
 func (runtime *Runtime) ExportCheckpoint() ControlCheckpoint {
@@ -26,11 +27,12 @@ func (runtime *Runtime) ExportCheckpoint() ControlCheckpoint {
 		ids = append(ids, record.Event.ID)
 	}
 	return ControlCheckpoint{
-		Events:  events,
-		Sync:    runtime.SyncState.ExportRecovery(),
-		Backup:  runtime.BackupState.ExportRecovery(),
-		Quality: runtime.Evidence.Export(ids),
-		Journal: runtime.Journal.Records(),
+		Events:        events,
+		Sync:          runtime.SyncState.ExportRecovery(),
+		Backup:        runtime.BackupState.ExportRecovery(),
+		Quality:       runtime.Evidence.Export(ids),
+		QualityPolicy: runtime.QualityPolicy.Export(ids),
+		Journal:       runtime.Journal.Records(),
 	}
 }
 
@@ -46,6 +48,9 @@ func (runtime *Runtime) RestoreCheckpoint(checkpoint ControlCheckpoint) (Recover
 	}
 	if err := runtime.Evidence.Restore(checkpoint.Quality); err != nil {
 		return RecoveryReport{}, fmt.Errorf("restore quality evidence: %w", err)
+	}
+	if err := runtime.QualityPolicy.Restore(checkpoint.QualityPolicy); err != nil {
+		return RecoveryReport{}, fmt.Errorf("restore quality policy: %w", err)
 	}
 	sources := make(map[model.EventID]model.SourceID)
 	for _, item := range checkpoint.Sync {

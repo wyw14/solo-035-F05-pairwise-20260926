@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OnAirMux 质量规则</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header><strong>OnAirMux</strong><nav><a href="/operations.html">节目</a><a href="/equipment.html">设备</a><a href="/interlocks.html">联锁</a><a href="/quality.html">质量规则</a><a href="/incidents.html">事件</a></nav></header>
+<main>
+<section>
+<p class="eyebrow">QUALITY POLICY</p>
+<h1>播出质量规则集</h1>
+<p id="stamp">正在连接播控服务</p>
+</section>
+
+<section class="panel">
+<h2>发布新规则版本</h2>
+<form id="publish-form">
+<label>播出类型
+<select name="profile">
+<option value="standard">standard 标准</option>
+<option value="news">news 新闻</option>
+<option value="sports">sports 体育</option>
+<option value="music">music 音乐</option>
+</select>
+</label>
+<label>最小响度 <input name="minimum_loudness" type="number" step="0.1" value="-60" required></label>
+<label>最大响度 <input name="maximum_loudness" type="number" step="0.1" value="6" required></label>
+<label>证据有效期(ms) <input name="maximum_age_millis" type="number" step="100" value="5000" required></label>
+<label>最少独立测点 <input name="minimum_sources" type="number" min="1" value="2" required></label>
+<label>测点种类 <input name="required_kinds" value="waveform,integrated-loudness" required></label>
+<button type="submit">发布</button>
+</form>
+<p id="publish-result" class="empty"></p>
+</section>
+
+<section class="panel">
+<h2>批准例外</h2>
+<form id="exception-form">
+<label>事件 ID <input name="event_id" required></label>
+<label>事件版本(可空) <input name="revision_id" placeholder="留空适用于该事件全部版本"></label>
+<label>豁免代码 <input name="waive" placeholder="loudness,freshness,required-kind,independent-sources；留空=全部"></label>
+<label>理由 <input name="message" required></label>
+<label>批准人 <input name="approved_by" required></label>
+<label>有效期(ms,可空) <input name="expires_in_millis" type="number" min="1"></label>
+<button type="submit">批准</button>
+</form>
+<p id="exception-result" class="empty"></p>
+</section>
+
+<section class="panel">
+<h2>用当时规则重新核算历史放行</h2>
+<form id="replay-form">
+<label>事件 ID(留空重算全部) <input name="event_id"></label>
+<button type="submit">重新核算</button>
+</form>
+<div id="replay-result" class="grid"></div>
+</section>
+
+<h2>规则目录</h2>
+<div id="rules" class="grid"></div>
+<h2>版本绑定</h2>
+<div id="bindings" class="grid"></div>
+<h2>例外批准</h2>
+<div id="exceptions" class="grid"></div>
+<h2>放行决定</h2>
+<div id="decisions" class="grid"></div>
+</main>
+<script src="/quality.js"></script>
+</body>
+</html>

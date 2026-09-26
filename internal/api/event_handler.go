@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+
+	"github.com/wyw14/solo-035/internal/model"
 )
 
 type createOperationRequest struct {
-	Name string `json:"name"`
+	Name    string `json:"name"`
+	Profile string `json:"profile"`
 }
 
 func (server *Server) createOperation(writer http.ResponseWriter, request *http.Request) {
@@ -24,9 +27,9 @@ func (server *Server) createOperation(writer http.ResponseWriter, request *http.
 		writeError(writer, http.StatusBadRequest, "operation name is required")
 		return
 	}
-	event, err := server.coordinator.CreateEvent(input.Name)
+	event, err := server.coordinator.CreateEventForProfile(input.Name, model.Profile(input.Profile))
 	if err != nil {
-		writeError(writer, http.StatusConflict, err.Error())
+		writeError(writer, http.StatusBadRequest, err.Error())
 		return
 	}
 	writeJSON(writer, http.StatusCreated, event)

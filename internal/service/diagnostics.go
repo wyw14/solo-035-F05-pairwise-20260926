@@ -104,11 +104,12 @@ func (runtime *Runtime) checkSignals(now time.Time) DiagnosticCheck {
 func (runtime *Runtime) checkEncoders(now time.Time) DiagnosticCheck {
 	resources := runtime.EncoderFlow.Equipment()
 	check := DiagnosticCheck{Name: "encoder-leases", Passed: true, CheckedAt: now}
-	thresholds := runtime.Evaluator.Thresholds()
-	if !runtime.AudioMonitor.WithinRange(thresholds.MinimumLoudness) || !runtime.AudioMonitor.WithinRange(thresholds.MaximumLoudness) {
-		check.Passed = false
-		check.Detail = "audio and quality thresholds disagree"
-		return check
+	for _, rule := range runtime.QualityPolicy.Catalog() {
+		if !runtime.AudioMonitor.WithinRange(rule.Thresholds.MinimumLoudness) || !runtime.AudioMonitor.WithinRange(rule.Thresholds.MaximumLoudness) {
+			check.Passed = false
+			check.Detail = "audio monitor range disagrees with quality rule " + rule.ID
+			return check
+		}
 	}
 	owners := make(map[model.EventID]string)
 	healthy := 0

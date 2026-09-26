@@ -11,6 +11,7 @@ import (
 	"github.com/wyw14/solo-035/internal/encoder"
 	"github.com/wyw14/solo-035/internal/event"
 	"github.com/wyw14/solo-035/internal/journal"
+	"github.com/wyw14/solo-035/internal/model"
 	"github.com/wyw14/solo-035/internal/mux"
 	"github.com/wyw14/solo-035/internal/playout"
 	"github.com/wyw14/solo-035/internal/quality"
@@ -39,7 +40,7 @@ type Runtime struct {
 	Continuity      *caption.Continuity
 	Evidence        *quality.EvidenceSet
 	Quality         *quality.Coordinator
-	Evaluator       *quality.Evaluator
+	QualityPolicy   *quality.Policy
 	JournalState    *journal.State
 	JournalStore    *journal.Store
 	Journal         *journal.Integration
@@ -63,10 +64,7 @@ func NewRuntime(dataDirectory string, clock func() time.Time) (*Runtime, error) 
 	if err != nil {
 		return nil, err
 	}
-	evaluator, err := quality.NewEvaluator(quality.Thresholds{MinimumLoudness: -60, MaximumLoudness: 6, MaximumAgeMillis: 5000})
-	if err != nil {
-		return nil, err
-	}
+	policy := quality.NewPolicy(clock)
 	runtime := &Runtime{Clock: clock}
 	runtime.Events = event.NewState()
 	runtime.EventFlow = event.NewIntegration(runtime.Events, clock)
@@ -86,8 +84,13 @@ func NewRuntime(dataDirectory string, clock func() time.Time) (*Runtime, error) 
 	runtime.CaptionFlow = caption.NewCoordinator(runtime.Captions, clock)
 	runtime.Continuity = caption.NewContinuity()
 	runtime.Evidence = quality.NewEvidenceSet()
-	runtime.Quality = quality.NewCoordinator(runtime.Evidence, clock)
-	runtime.Evaluator = evaluator
+	runtime.QualityPolicy = policy
+	runtime.Quality = quality.NewCoordinator(runtime.Evidence, policy, func(eventID model.EventID) quality.Profile {
+		if live, ok := runtime.Events.Get(eventID); ok {
+			return live.Profile
+		}
+		return quality.ProfileStandard
+	}, clock)
 	runtime.JournalState = journal.NewState()
 	runtime.JournalStore = store
 	runtime.Journal = journal.NewIntegration(store, runtime.JournalState, clock)

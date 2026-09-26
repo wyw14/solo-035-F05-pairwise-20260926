@@ -5,6 +5,7 @@ import "time"
 type OperationView struct {
 	EventID          EventID    `json:"event_id"`
 	Name             string     `json:"name"`
+	Profile          Profile    `json:"profile"`
 	Phase            EventPhase `json:"phase"`
 	ProgramRevision  RevisionID `json:"program_revision"`
 	SourceGeneration uint64     `json:"source_generation"`

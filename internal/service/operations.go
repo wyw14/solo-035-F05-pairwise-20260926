@@ -13,6 +13,7 @@ func (runtime *Runtime) Snapshot() model.RuntimeSnapshot {
 		snapshot.Operations = append(snapshot.Operations, model.OperationView{
 			EventID:          event.ID,
 			Name:             event.Name,
+			Profile:          event.Profile,
 			Phase:            event.Phase,
 			ProgramRevision:  event.Revision,
 			SourceGeneration: event.SourceGeneration,

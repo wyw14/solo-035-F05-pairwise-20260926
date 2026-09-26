@@ -7,6 +7,7 @@ import (
 
 	"github.com/wyw14/solo-035/internal/backup"
 	"github.com/wyw14/solo-035/internal/model"
+	"github.com/wyw14/solo-035/internal/quality"
 )
 
 type ControlRequest struct {
@@ -14,11 +15,27 @@ type ControlRequest struct {
 	EventID     string `json:"event_id"`
 	SourceID    string `json:"source_id"`
 	EncoderID   string `json:"encoder_id"`
+	RevisionID  string `json:"revision_id"`
 	Healthy     bool   `json:"healthy"`
 	Bitrate     int    `json:"bitrate"`
 	Count       int64  `json:"count"`
 	Message     string `json:"message"`
 	DelayMillis int64  `json:"delay_millis"`
+
+	// Quality rule publishing.
+	Profile          string   `json:"profile"`
+	MinimumLoudness  float64  `json:"minimum_loudness"`
+	MaximumLoudness  float64  `json:"maximum_loudness"`
+	MaximumAgeMillis int64    `json:"maximum_age_millis"`
+	RequiredKinds    []string `json:"required_kinds"`
+	MinimumSources   int      `json:"minimum_sources"`
+
+	// Quality exception approvals.
+	ExceptionID     string   `json:"exception_id"`
+	Waive           []string `json:"waive"`
+	Reason          string   `json:"reason"`
+	ApprovedBy      string   `json:"approved_by"`
+	ExpiresInMillis int64    `json:"expires_in_millis"`
 }
 
 type ControlResult struct {
@@ -98,6 +115,47 @@ func (runtime *Runtime) ExecuteControl(ctx context.Context, request ControlReque
 	case "quality-reset":
 		runtime.Quality.Reset(eventID)
 		result.Value = eventID
+		return result, nil
+	case "publish-quality-rule":
+		rule, err := runtime.QualityPolicy.Publish(
+			quality.Profile(request.Profile),
+			quality.Thresholds{
+				MinimumLoudness:  request.MinimumLoudness,
+				MaximumLoudness:  request.MaximumLoudness,
+				MaximumAgeMillis: request.MaximumAgeMillis,
+			},
+			request.RequiredKinds,
+			request.MinimumSources,
+		)
+		if err != nil {
+			return result, err
+		}
+		result.Value = rule
+		return result, nil
+	case "grant-quality-exception":
+		if !eventID.Valid() {
+			return result, fmt.Errorf("quality exception requires an event")
+		}
+		exception := quality.Exception{
+			ID:         request.ExceptionID,
+			EventID:    eventID,
+			Revision:   model.RevisionID(request.RevisionID),
+			Waive:      request.Waive,
+			Reason:     request.Message,
+			ApprovedBy: request.ApprovedBy,
+		}
+		if request.ExpiresInMillis > 0 {
+			expiry := runtime.Clock().UTC().Add(time.Duration(request.ExpiresInMillis) * time.Millisecond)
+			exception.ExpiresAt = &expiry
+		}
+		approved, err := runtime.QualityPolicy.GrantException(exception)
+		if err != nil {
+			return result, err
+		}
+		result.Value = approved
+		return result, nil
+	case "reevaluate-quality":
+		result.Value = runtime.Quality.Reevaluate(eventID)
 		return result, nil
 	case "record-gap":
 		if err := runtime.Receiver.RecordGap(sourceID, request.Count); err != nil {

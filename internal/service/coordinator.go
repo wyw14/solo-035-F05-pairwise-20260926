@@ -18,7 +18,11 @@ func NewCoordinator(runtime *Runtime) *Coordinator {
 }
 
 func (coordinator *Coordinator) CreateEvent(name string) (model.LiveEvent, error) {
-	event, err := coordinator.runtime.Events.Create(name, coordinator.runtime.Clock())
+	return coordinator.CreateEventForProfile(name, model.ProfileStandard)
+}
+
+func (coordinator *Coordinator) CreateEventForProfile(name string, profile model.Profile) (model.LiveEvent, error) {
+	event, err := coordinator.runtime.Events.CreateForProfile(name, profile, coordinator.runtime.Clock())
 	if err != nil {
 		return model.LiveEvent{}, err
 	}
@@ -94,25 +98,19 @@ func (coordinator *Coordinator) EstablishInterlocks(eventID model.EventID) error
 	if !ok {
 		return fmt.Errorf("event %s not found", eventID)
 	}
-	waveA, _, err := coordinator.runtime.AudioMonitor.Measure("probe-a", -18, coordinator.runtime.Clock())
+	waveA, loudnessA, err := coordinator.runtime.AudioMonitor.Measure("probe-a", -18, coordinator.runtime.Clock())
 	if err != nil {
 		return err
 	}
-	waveB, _, err := coordinator.runtime.AudioMonitor.Measure("probe-b", -17, coordinator.runtime.Clock())
+	waveB, loudnessB, err := coordinator.runtime.AudioMonitor.Measure("probe-b", -17, coordinator.runtime.Clock())
 	if err != nil {
 		return err
 	}
-	if err := coordinator.runtime.Evaluator.Accept(waveA); err != nil {
-		return err
-	}
-	if err := coordinator.runtime.Evaluator.Accept(waveB); err != nil {
-		return err
-	}
-	if err := coordinator.runtime.Quality.Record(eventID, waveA); err != nil {
-		return err
-	}
-	if err := coordinator.runtime.Quality.Record(eventID, waveB); err != nil {
-		return err
+	measurements := []model.AudioEvidence{waveA, loudnessA, waveB, loudnessB}
+	for _, measurement := range measurements {
+		if err := coordinator.runtime.Quality.Record(event.ID, event.Revision, measurement); err != nil {
+			return err
+		}
 	}
 	if err := coordinator.runtime.Continuity.Accept(eventID, caption.Cue{Revision: event.Revision, Sequence: 1, Text: "ON AIR"}); err != nil {
 		return err
@@ -132,7 +130,7 @@ func (coordinator *Coordinator) CommitOnAir(eventID model.EventID, fence uint64)
 	if err := coordinator.runtime.CaptionFlow.Ready(eventID, event.Revision); err != nil {
 		return err
 	}
-	if _, err := coordinator.runtime.Quality.Permit(eventID, true, true); err != nil {
+	if _, err := coordinator.runtime.Quality.Permit(eventID, event.Revision, true, true); err != nil {
 		return err
 	}
 	if err := coordinator.runtime.Playout.CommitOnAir(event, fence, map[string]any{"offset_ms": 0, "source_generation": event.SourceGeneration}); err != nil {

@@ -37,3 +37,7 @@ func (server *Server) incidents(writer http.ResponseWriter, request *http.Reques
 func (server *Server) snapshot(writer http.ResponseWriter, request *http.Request) {
 	writeJSON(writer, http.StatusOK, server.runtime.Snapshot())
 }
+
+func (server *Server) quality(writer http.ResponseWriter, request *http.Request) {
+	writeJSON(writer, http.StatusOK, server.runtime.QualityOverview())
+}

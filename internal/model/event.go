@@ -8,6 +8,26 @@ import (
 
 type EventPhase string
 
+// Profile identifies the broadcast family of an event. Different families
+// carry different on-air quality requirements.
+type Profile string
+
+const (
+	ProfileStandard Profile = "standard"
+	ProfileNews     Profile = "news"
+	ProfileSports   Profile = "sports"
+	ProfileMusic    Profile = "music"
+)
+
+func ValidProfile(profile Profile) bool {
+	switch profile {
+	case "", ProfileStandard, ProfileNews, ProfileSports, ProfileMusic:
+		return true
+	default:
+		return false
+	}
+}
+
 const (
 	PhasePreparing  EventPhase = "preparing"
 	PhaseRehearsal  EventPhase = "rehearsal"
@@ -31,6 +51,7 @@ var phaseTransitions = map[EventPhase]map[EventPhase]bool{
 type LiveEvent struct {
 	ID               EventID    `json:"id"`
 	Name             string     `json:"name"`
+	Profile          Profile    `json:"profile"`
 	Phase            EventPhase `json:"phase"`
 	Revision         RevisionID `json:"revision"`
 	CommandEpoch     uint64     `json:"command_epoch"`
@@ -40,12 +61,23 @@ type LiveEvent struct {
 }
 
 func NewLiveEvent(name string, now time.Time) (LiveEvent, error) {
+	return NewLiveEventForProfile(name, ProfileStandard, now)
+}
+
+func NewLiveEventForProfile(name string, profile Profile, now time.Time) (LiveEvent, error) {
 	if name == "" {
 		return LiveEvent{}, errors.New("event name is required")
+	}
+	if profile == "" {
+		profile = ProfileStandard
+	}
+	if !ValidProfile(profile) {
+		return LiveEvent{}, fmt.Errorf("event broadcast profile %q is not supported", profile)
 	}
 	return LiveEvent{
 		ID:               NewEventID(),
 		Name:             name,
+		Profile:          profile,
 		Phase:            PhasePreparing,
 		Revision:         NewRevisionID(),
 		CommandEpoch:     1,

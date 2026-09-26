@@ -29,6 +29,7 @@ func (server *Server) Router() http.Handler {
 		api.Get("/incidents", server.incidents)
 		api.Get("/snapshot", server.snapshot)
 		api.Get("/detail", server.detail)
+		api.Get("/quality", server.quality)
 		api.Post("/control", server.control)
 		api.Get("/checkpoint", server.exportCheckpoint)
 		api.Post("/checkpoint", server.restoreCheckpoint)

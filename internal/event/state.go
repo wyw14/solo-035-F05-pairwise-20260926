@@ -20,7 +20,11 @@ func NewState() *State {
 }
 
 func (state *State) Create(name string, now time.Time) (model.LiveEvent, error) {
-	event, err := model.NewLiveEvent(name, now)
+	return state.CreateForProfile(name, model.ProfileStandard, now)
+}
+
+func (state *State) CreateForProfile(name string, profile model.Profile, now time.Time) (model.LiveEvent, error) {
+	event, err := model.NewLiveEventForProfile(name, profile, now)
 	if err != nil {
 		return model.LiveEvent{}, err
 	}
